@@ -1,6 +1,8 @@
 # Hiring Platform - Microservices Backend
 
-This repository contains the backend source code for a microservices-based Hiring Platform. The platform connects recruiters and job seekers, allowing recruiters to post jobs and candidates to search and apply for them.## Features
+This repository contains the backend source code for a microservices-based Hiring Platform. The platform connects recruiters and job seekers, allowing recruiters to post jobs and candidates to search and apply for them.
+
+## Features
 
 - Microservices Architecture for scalability and maintainability
 - Service Discovery using Netflix Eureka
@@ -10,7 +12,9 @@ This repository contains the backend source code for a microservices-based Hirin
 - Candidate Profile Management
 - Email Notifications for job applications
 - Inter-service communication using OpenFeign
-- MongoDB for data persistence## Tech Stack
+- MongoDB for data persistence
+
+- ## Tech Stack
 
 **Language:** Java 21
 
