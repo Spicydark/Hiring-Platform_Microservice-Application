@@ -2,28 +2,26 @@ package com.hiringplatform.job_service.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.index.Indexed; // Import Indexed
+import org.springframework.data.mongodb.core.index.Indexed;
 import java.util.List;
 
 /**
- * Represents a candidate's professional profile document.
- * Stored in the "CandidateProfiles" collection.
+ * Candidate profile DTO used by Job Service.
+ * Mirrors candidate profile structure from Candidate Service.
  */
 @Document(collection = "CandidateProfiles")
 public class CandidateProfile {
 
     @Id
-    private String id; // Unique MongoDB identifier.
+    private String id;
 
-    @Indexed(unique = true) // Ensure one profile per user
-    private String userId; // ID linking this profile to a User in the Auth Service.
-    private String fullName; // Candidate's full name.
-    private String email; // Candidate's contact email.
-    private int totalExperience; // Candidate's total years of experience.
-    private List<String> skills; // List of candidate's skills.
-    private String resumeUrl; // URL to the candidate's resume file.
-
-    // --- Standard Getters and Setters ---
+    @Indexed(unique = true)
+    private String userId;
+    private String fullName;
+    private String email;
+    private int totalExperience;
+    private List<String> skills;
+    private String resumeUrl;
 
     public String getId() {
         return id;

@@ -5,21 +5,20 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.util.List;
 
 /**
- * Represents a single job posting document in the "JobPostings" collection.
+ * Job posting entity stored in MongoDB.
+ * Contains job details including role, requirements, and recruiter information.
  */
 @Document(collection = "JobPostings")
 public class JobPosting {
 
     @Id
-    private String id; // Unique MongoDB identifier.
+    private String id;
 
-    private String role; // The job title or role.
-    private String description; // Detailed description of the job.
-    private int experience; // Required experience in years.
-    private List<String> skillSet; // List of required skills.
-    private String recruiterId; // ID of the User (recruiter) who posted this job. Links to the User in Auth Service.
-
-    // --- Standard Getters and Setters ---
+    private String role;
+    private String description;
+    private int experience;
+    private List<String> skillSet;
+    private String recruiterId;
 
     public String getId() {
         return id;

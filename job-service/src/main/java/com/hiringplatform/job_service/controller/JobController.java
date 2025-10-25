@@ -1,12 +1,10 @@
 package com.hiringplatform.job_service.controller;
 
 import com.hiringplatform.job_service.client.AuthServiceClient;
-import com.hiringplatform.job_service.client.CandidateServiceClient; // Import Candidate Feign Client
+import com.hiringplatform.job_service.client.CandidateServiceClient;
 import com.hiringplatform.job_service.dto.UserDTO;
-import com.hiringplatform.job_service.model.CandidateProfile; // Import CandidateProfile (used as DTO)
+import com.hiringplatform.job_service.model.CandidateProfile;
 import com.hiringplatform.job_service.model.JobPosting;
-// REMOVE: CandidateProfileRepository import
-// import com.hiringplatform.jobservice.repository.CandidateProfileRepository;
 import com.hiringplatform.job_service.repository.JobPostingRepository;
 import com.hiringplatform.job_service.repository.SearchRepository;
 import com.hiringplatform.job_service.service.EmailService;
@@ -20,276 +18,213 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * REST Controller for managing Job Posting operations. Exposes endpoints for
- * creating, retrieving, searching, and applying to jobs.
+ * REST controller for job posting management.
+ * Handles job creation, retrieval, search, and application processing.
  */
 @RestController
 @RequestMapping("/posts")
-@CrossOrigin(origins = "*", maxAge = 3600) // Allow cross-origin requests (adjust in production)
+@CrossOrigin(origins = "*", maxAge = 3600)
 public class JobController {
 
-	// --- Autowired Repositories, Services, and Clients ---
+@Autowired
+private JobPostingRepository jobPostingRepository;
 
-	@Autowired
-	private JobPostingRepository jobPostingRepository; // Handles direct JobPosting data access
+@Autowired
+private SearchRepository searchRepository;
 
-	@Autowired
-	private SearchRepository searchRepository; // Handles advanced job searching
+@Autowired
+private EmailService emailService;
 
-	// REMOVE: No longer directly access Candidate Profile data
-	// @Autowired
-	// private CandidateProfileRepository candidateProfileRepository;
+@Autowired
+private AuthServiceClient authServiceClient;
 
-	@Autowired
-	private EmailService emailService; // Handles sending emails
+@Autowired
+private CandidateServiceClient candidateServiceClient;
 
-	@Autowired
-	private AuthServiceClient authServiceClient; // Feign client for Auth Service
+/**
+ * Retrieves all job postings.
+ * @return List of all job postings
+ */
+@GetMapping("/all")
+public List<JobPosting> getAllPosts() {
+return jobPostingRepository.findAll();
+}
 
-	@Autowired
-	private CandidateServiceClient candidateServiceClient; // Feign client for Candidate Service
+/**
+ * Retrieves specific job posting by ID.
+ * @param id Job posting ID
+ * @return Job posting or 404
+ */
+@GetMapping("/{id}")
+public ResponseEntity<JobPosting> getPostById(@PathVariable String id) {
+return jobPostingRepository.findById(id).map(ResponseEntity::ok)
+.orElse(ResponseEntity.notFound().build());
+}
 
-	// --- Public Endpoints ---
+/**
+ * Searches job postings by text query.
+ * @param text Search keyword
+ * @return List of matching job postings
+ */
+@GetMapping("/search/{text}")
+public List<JobPosting> search(@PathVariable String text) {
+return searchRepository.findByText(text);
+}
 
-	/**
-	 * Retrieves all job postings. Endpoint: GET /posts/all
-	 *
-	 * @return A list of all JobPosting objects.
-	 */
-	@GetMapping("/all")
-	public List<JobPosting> getAllPosts() {
-		return jobPostingRepository.findAll();
-	}
+/**
+ * Creates new job posting (RECRUITER role required).
+ * @param post Job posting data
+ * @return Created job posting or error
+ */
+@PostMapping("/add")
+public ResponseEntity<JobPosting> addPost(@RequestBody JobPosting post) {
+if (post.getRecruiterId() == null || post.getRecruiterId().isEmpty()) {
+System.err.println("Recruiter ID missing in job post request.");
+return ResponseEntity.badRequest().body(null);
+}
+post.setId(null);
+JobPosting savedPost = jobPostingRepository.save(post);
+return ResponseEntity.status(HttpStatus.CREATED).body(savedPost);
+}
 
-	/**
-	 * Retrieves a single job posting by its unique ID. Endpoint: GET /posts/{id}
-	 *
-	 * @param id The ID of the job posting.
-	 * @return ResponseEntity containing the JobPosting if found, or 404 Not Found.
-	 */
-	@GetMapping("/{id}")
-	public ResponseEntity<JobPosting> getPostById(@PathVariable String id) {
-		return jobPostingRepository.findById(id).map(ResponseEntity::ok) // If found, return 200 OK with the job
-				.orElse(ResponseEntity.notFound().build()); // If not found, return 404
-	}
+/**
+ * Processes job application (JOB_SEEKER role required).
+ * Fetches candidate profile and recruiter details, sends notification email.
+ * @param jobId Job ID being applied for
+ * @param applyingUserId Applicant user ID from header
+ * @return Success or error message
+ */
+@PostMapping("/apply/{jobId}")
+public ResponseEntity<String> applyForJob(@PathVariable String jobId,
+@RequestHeader("X-User-ID") String applyingUserId) {
 
-	/**
-	 * Searches for job postings based on a text query. Endpoint: GET
-	 * /posts/search/{text}
-	 *
-	 * @param text The search keyword.
-	 * @return A list of JobPostings matching the search text.
-	 */
-	@GetMapping("/search/{text}")
-	public List<JobPosting> search(@PathVariable String text) {
-		// Delegates to the SearchRepository implementation (e.g., using Atlas Search)
-		return searchRepository.findByText(text);
-	}
+Optional<JobPosting> jobOpt = jobPostingRepository.findById(jobId);
+if (jobOpt.isEmpty()) {
+return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Job not found.");
+}
+JobPosting job = jobOpt.get();
+String recruiterId = job.getRecruiterId();
 
-	// --- Protected Endpoints ---
+CandidateProfile candidateProfile = null;
+try {
+ResponseEntity<CandidateProfile> profileResponse = candidateServiceClient
+.getProfileByUserId(applyingUserId);
 
-	/**
-	 * Creates a new job posting. Requires RECRUITER role (enforced by
-	 * Gateway/Security). Endpoint: POST /posts/add Expects recruiterId to be set in
-	 * the request body.
-	 *
-	 * @param post The JobPosting data from the request body.
-	 * @return ResponseEntity containing the created JobPosting or 400 Bad Request.
-	 */
-	@PostMapping("/add")
-	public ResponseEntity<JobPosting> addPost(@RequestBody JobPosting post) {
-		// Basic validation: Ensure recruiterId is provided in the request
-		// More robust validation can be added (e.g., check if recruiterId exists via
-		// Auth service)
-		if (post.getRecruiterId() == null || post.getRecruiterId().isEmpty()) {
-			System.err.println("Recruiter ID missing in job post request.");
-			// Consider returning a more informative error message body
-			return ResponseEntity.badRequest().body(null); // Indicate missing required field
-		}
-		// Ensure MongoDB generates a new ID
-		post.setId(null);
-		JobPosting savedPost = jobPostingRepository.save(post);
-		// Return 201 Created status with the newly created job posting
-		return ResponseEntity.status(HttpStatus.CREATED).body(savedPost);
-	}
+if (profileResponse.getStatusCode() == HttpStatus.OK && profileResponse.getBody() != null) {
+candidateProfile = profileResponse.getBody();
+} else {
+System.err.println(
+"Could not retrieve candidate profile (Status: " + profileResponse.getStatusCode() + ")");
+return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+.body("Candidate profile not found or service error. Please ensure profile exists.");
+}
+} catch (FeignException.NotFound ex) {
+System.err.println(
+"Feign Client Error (NotFound): Candidate profile for user " + applyingUserId + " not found.");
+return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+.body("Candidate profile not found. Please create one first.");
+} catch (FeignException ex) {
+System.err.println("Feign Client Error calling Candidate Service: " + ex.getMessage());
+return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error contacting candidate service.");
+} catch (Exception e) {
+System.err.println("Unexpected error during candidate service call: " + e.getMessage());
+return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+.body("An unexpected error occurred retrieving profile.");
+}
 
-	/**
-	 * Handles a job application request. Requires JOB_SEEKER role (enforced by
-	 * Gateway/Security). Endpoint: POST /posts/apply/{jobId} Fetches details via
-	 * Feign clients and sends an email notification. Expects the applying user's ID
-	 * in the 'X-User-ID' header (added by Gateway).
-	 *
-	 * @param jobId          The ID of the job being applied for.
-	 * @param applyingUserId The ID of the user applying (from header).
-	 * @return ResponseEntity indicating success or failure.
-	 */
-	@PostMapping("/apply/{jobId}")
-	public ResponseEntity<String> applyForJob(@PathVariable String jobId,
-			@RequestHeader("X-User-ID") String applyingUserId) {
+if (candidateProfile == null) {
+return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+.body("Failed to retrieve candidate profile details.");
+}
 
-		// --- Step 1: Validate Job Posting ---
-		Optional<JobPosting> jobOpt = jobPostingRepository.findById(jobId);
-		if (jobOpt.isEmpty()) {
-			return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Job not found.");
-		}
-		JobPosting job = jobOpt.get();
-		String recruiterId = job.getRecruiterId();
+String recruiterEmail = null;
+try {
+ResponseEntity<UserDTO> response = authServiceClient.getUserById(recruiterId);
 
-		// --- Step 2: Fetch Candidate Profile via Feign ---
-		CandidateProfile candidateProfile = null;
-		try {
-			// Call the Candidate Service using the Feign client
-			ResponseEntity<CandidateProfile> profileResponse = candidateServiceClient
-					.getProfileByUserId(applyingUserId);
+if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+recruiterEmail = response.getBody().getEmail();
+if (recruiterEmail == null || recruiterEmail.isEmpty()) {
+System.err.println("Recruiter email is null or empty in UserDTO for user ID: " + recruiterId);
+return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+.body("Recruiter email could not be determined from auth service response.");
+}
+} else {
+return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+.body("Could not retrieve recruiter details (Status: " + response.getStatusCode() + ")");
+}
+} catch (FeignException.NotFound ex) {
+System.err.println(
+"Feign Client Error (NotFound): Recruiter user " + recruiterId + " not found in Auth Service.");
+return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+.body("Recruiter user associated with the job not found.");
+} catch (FeignException ex) {
+System.err.println("Feign Client Error calling Auth Service: " + ex.getMessage());
+return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+.body("Error contacting authentication service.");
+} catch (Exception e) {
+System.err.println("Unexpected error during auth service call: " + e.getMessage());
+return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+.body("An unexpected error occurred retrieving recruiter email.");
+}
 
-			// Check if the call was successful and data is present
-			if (profileResponse.getStatusCode() == HttpStatus.OK && profileResponse.getBody() != null) {
-				candidateProfile = profileResponse.getBody();
-			} else {
-				// Handle non-OK status from Candidate Service
-				System.err.println(
-						"Could not retrieve candidate profile (Status: " + profileResponse.getStatusCode() + ")");
-				return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-						.body("Candidate profile not found or service error. Please ensure profile exists.");
-			}
-		} catch (FeignException.NotFound ex) {
-			// Handle 404 specifically - profile doesn't exist for the user
-			System.err.println(
-					"Feign Client Error (NotFound): Candidate profile for user " + applyingUserId + " not found.");
-			return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-					.body("Candidate profile not found. Please create one first.");
-		} catch (FeignException ex) {
-			// Handle other Feign errors (network issues, service down, etc.)
-			System.err.println("Feign Client Error calling Candidate Service: " + ex.getMessage());
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error contacting candidate service.");
-		} catch (Exception e) {
-			// Catch any other unexpected exceptions during the call
-			System.err.println("Unexpected error during candidate service call: " + e.getMessage());
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-					.body("An unexpected error occurred retrieving profile.");
-		}
+if (recruiterEmail == null || recruiterEmail.isEmpty()) {
+return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+.body("Recruiter email could not be determined.");
+}
 
-		// Defensive check, although handled in try-catch
-		if (candidateProfile == null) {
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-					.body("Failed to retrieve candidate profile details.");
-		}
+String subject = "New Application for " + job.getRole();
+String body = buildApplicationEmailBody(candidateProfile, job);
+try {
+emailService.sendEmail(recruiterEmail, subject, body);
+} catch (Exception e) {
+System.err.println(
+"Failed to send application notification email to " + recruiterEmail + ": " + e.getMessage());
+}
 
-		// --- Step 3: Fetch Recruiter Email via Feign ---
-		String recruiterEmail = null;
-		try {
-			// Call the Auth Service using the Feign client
-			ResponseEntity<UserDTO> response = authServiceClient.getUserById(recruiterId);
+return ResponseEntity.ok("Application submitted successfully!");
+}
 
-			// Check if the call was successful and data is present
-			if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-				recruiterEmail = response.getBody().getEmail();
-				// Check specifically if the email field itself is missing/empty in the response
-				if (recruiterEmail == null || recruiterEmail.isEmpty()) {
-					System.err.println("Recruiter email is null or empty in UserDTO for user ID: " + recruiterId);
-					return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-							.body("Recruiter email could not be determined from auth service response.");
-				}
-			} else {
-				// Handle non-OK status from Auth Service
-				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-						.body("Could not retrieve recruiter details (Status: " + response.getStatusCode() + ")");
-			}
-		} catch (FeignException.NotFound ex) {
-			// Handle 404 specifically - recruiter user doesn't exist
-			System.err.println(
-					"Feign Client Error (NotFound): Recruiter user " + recruiterId + " not found in Auth Service.");
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-					.body("Recruiter user associated with the job not found.");
-		} catch (FeignException ex) {
-			// Handle other Feign errors
-			System.err.println("Feign Client Error calling Auth Service: " + ex.getMessage());
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-					.body("Error contacting authentication service.");
-		} catch (Exception e) {
-			// Catch any other unexpected exceptions
-			System.err.println("Unexpected error during auth service call: " + e.getMessage());
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-					.body("An unexpected error occurred retrieving recruiter email.");
-		}
+/**
+ * Builds HTML email body for application notification.
+ * @param profile Candidate profile
+ * @param job Job posting details
+ * @return HTML email body string
+ */
+private String buildApplicationEmailBody(CandidateProfile profile, JobPosting job) {
+StringBuilder sb = new StringBuilder();
+sb.append("<html><body>");
+sb.append("<h1>New Application Received</h1>");
+sb.append("<p>A candidate has applied for the position: <strong>").append(job.getRole())
+.append("</strong> (Job ID: ").append(job.getId()).append(")</p>");
+sb.append("<hr>");
 
-		// Defensive check, also handled above
-		if (recruiterEmail == null || recruiterEmail.isEmpty()) {
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-					.body("Recruiter email could not be determined.");
-		}
+sb.append("<h2>Candidate Details:</h2>");
+sb.append("<table border='0' cellpadding='5' style='border-collapse: collapse;'>");
+sb.append("<tr><td style='vertical-align: top;'><strong>Name:</strong></td><td>").append(profile.getFullName())
+.append("</td></tr>");
+sb.append("<tr><td style='vertical-align: top;'><strong>Email:</strong></td><td>").append(profile.getEmail())
+.append("</td></tr>");
+sb.append("<tr><td style='vertical-align: top;'><strong>Experience:</strong></td><td>")
+.append(profile.getTotalExperience()).append(" years</td></tr>");
 
-		// --- Step 4: Send Email Notification ---
-		String subject = "New Application for " + job.getRole();
-		String body = buildApplicationEmailBody(candidateProfile, job);
-		try {
-			// Use the injected EmailService
-			emailService.sendEmail(recruiterEmail, subject, body);
-		} catch (Exception e) {
-			// Log email sending failure but potentially still return success to the user
-			System.err.println(
-					"Failed to send application notification email to " + recruiterEmail + ": " + e.getMessage());
-			// Depending on requirements, you might return an error here instead.
-			// For now, we'll log the error but still confirm application receipt.
-			// return
-			// ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Application
-			// received but failed to send notification email.");
-		}
+if (profile.getSkills() != null && !profile.getSkills().isEmpty()) {
+sb.append("<tr><td style='vertical-align: top;'><strong>Skills:</strong></td><td>")
+.append(String.join(", ", profile.getSkills())).append("</td></tr>");
+} else {
+sb.append("<tr><td style='vertical-align: top;'><strong>Skills:</strong></td><td>Not provided</td></tr>");
+}
 
-		// Return success response to the applying user
-		return ResponseEntity.ok("Application submitted successfully!");
-	}
+if (profile.getResumeUrl() != null && !profile.getResumeUrl().isEmpty()) {
+sb.append("<tr><td style='vertical-align: top;'><strong>Resume:</strong></td><td><a href='")
+.append(profile.getResumeUrl()).append("' target='_blank'>View Resume</a></td></tr>");
+} else {
+sb.append("<tr><td style='vertical-align: top;'><strong>Resume:</strong></td><td>Not provided</td></tr>");
+}
 
-	/**
-	 * Helper method to construct the HTML email body for the application
-	 * notification.
-	 *
-	 * @param profile The profile of the applying candidate.
-	 * @param job     The job posting being applied for.
-	 * @return An HTML string representing the email body.
-	 */
-	private String buildApplicationEmailBody(CandidateProfile profile, JobPosting job) {
-		// Using StringBuilder for efficient string concatenation
-		StringBuilder sb = new StringBuilder();
-		sb.append("<html><body>"); // Start HTML email
-		sb.append("<h1>New Application Received</h1>");
-		sb.append("<p>A candidate has applied for the position: <strong>").append(job.getRole())
-				.append("</strong> (Job ID: ").append(job.getId()).append(")</p>");
-		sb.append("<hr>"); // Add a separator
-
-		sb.append("<h2>Candidate Details:</h2>");
-		sb.append("<table border='0' cellpadding='5' style='border-collapse: collapse;'>"); // Use a simple table for
-																							// layout
-		sb.append("<tr><td style='vertical-align: top;'><strong>Name:</strong></td><td>").append(profile.getFullName())
-				.append("</td></tr>");
-		sb.append("<tr><td style='vertical-align: top;'><strong>Email:</strong></td><td>").append(profile.getEmail())
-				.append("</td></tr>");
-		sb.append("<tr><td style='vertical-align: top;'><strong>Experience:</strong></td><td>")
-				.append(profile.getTotalExperience()).append(" years</td></tr>");
-
-		// Check if skills list is available and not empty
-		if (profile.getSkills() != null && !profile.getSkills().isEmpty()) {
-			sb.append("<tr><td style='vertical-align: top;'><strong>Skills:</strong></td><td>")
-					.append(String.join(", ", profile.getSkills())).append("</td></tr>");
-		} else {
-			sb.append("<tr><td style='vertical-align: top;'><strong>Skills:</strong></td><td>Not provided</td></tr>");
-		}
-
-		// Check if resume URL is available
-		if (profile.getResumeUrl() != null && !profile.getResumeUrl().isEmpty()) {
-			// Make the link clickable
-			sb.append("<tr><td style='vertical-align: top;'><strong>Resume:</strong></td><td><a href=\"")
-					.append(profile.getResumeUrl()).append("\">View Resume</a></td></tr>");
-		} else {
-			sb.append("<tr><td style='vertical-align: top;'><strong>Resume:</strong></td><td>Not provided</td></tr>");
-		}
-
-		sb.append("</table>"); // End table
-		sb.append("<hr>"); // Add another separator
-
-		sb.append(
-				"<p style='font-size: smaller; color: #555;'>Please review the candidate's details. You can contact them directly via their email address.</p>");
-		sb.append("</body></html>"); // End HTML email
-		return sb.toString();
-	}
+sb.append("</table>");
+sb.append("<hr>");
+sb.append("<p style='font-size: 0.9em; color: gray;'>This is an automated email from the Hiring Platform.</p>");
+sb.append("</body></html>");
+return sb.toString();
+}
 }
