@@ -16,7 +16,7 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.authority.SimpleGrantedAuthority; // Correct import
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -33,8 +33,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Spring Security configuration class for the Authentication Service.
- * Defines authentication mechanisms, authorization rules, and security filters.
+ * Security configuration for authentication service.
+ * Configures JWT-based stateless authentication, authorization rules, and CORS.
  */
 @Configuration
 @EnableWebSecurity
@@ -44,31 +44,23 @@ public class SecurityConfig {
     private UserRepository userRepository;
 
     /**
-     * Defines the service responsible for loading user-specific data (UserDetails).
-     * It fetches user details from the UserRepository based on the username.
-     *
-     * @return An implementation of UserDetailsService.
+     * Loads user details from database for authentication.
+     * @return UserDetailsService implementation
      */
     @Bean
     public UserDetailsService userDetailsService() {
         return username -> userRepository.findByUsername(username)
-            // Map the User entity to Spring Security's UserDetails interface
             .map(user -> new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),
-                // Convert the user's role string into a GrantedAuthority object
-                // Spring Security requires roles to be prefixed with "ROLE_"
                 Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole()))
             ))
-            // Throw exception if user is not found, handled by Spring Security
             .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
     }
 
     /**
-     * Defines the password encoder bean.
-     * BCrypt is used for strong, salted password hashing.
-     *
-     * @return A PasswordEncoder instance.
+     * Password encoder using BCrypt hashing algorithm.
+     * @return BCryptPasswordEncoder instance
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -76,10 +68,8 @@ public class SecurityConfig {
     }
 
     /**
-     * Configures the primary AuthenticationProvider (DaoAuthenticationProvider).
-     * Links the UserDetailsService and PasswordEncoder to handle username/password authentication.
-     *
-     * @return An AuthenticationProvider instance.
+     * Authentication provider linking UserDetailsService and PasswordEncoder.
+     * @return DaoAuthenticationProvider for username/password authentication
      */
     @Bean
     public AuthenticationProvider authenticationProvider() {
@@ -90,12 +80,10 @@ public class SecurityConfig {
     }
 
     /**
-     * Exposes the AuthenticationManager as a Bean.
-     * Required by the AuthController for programmatic authentication during login.
-     *
-     * @param config The AuthenticationConfiguration provided by Spring Boot.
-     * @return The AuthenticationManager instance.
-     * @throws Exception If an error occurs retrieving the AuthenticationManager.
+     * Exposes AuthenticationManager for programmatic authentication.
+     * @param config Spring-provided authentication configuration
+     * @return AuthenticationManager instance
+     * @throws Exception if manager cannot be retrieved
      */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
@@ -103,92 +91,69 @@ public class SecurityConfig {
     }
 
     /**
-     * Defines the main security filter chain for the application.
-     * Configures CSRF, CORS, session management, authorization rules, and JWT filter integration.
-     *
-     * @param http             The HttpSecurity object to configure.
-     * @param jwtAuthFilter    The custom JWT filter to be added to the chain.
-     * @return The configured SecurityFilterChain.
-     * @throws Exception If an error occurs during configuration.
+     * Configures security filter chain with JWT authentication.
+     * @param http HttpSecurity object to configure
+     * @param jwtAuthFilter Custom JWT request filter
+     * @return Configured SecurityFilterChain
+     * @throws Exception if configuration fails
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtRequestFilter jwtAuthFilter) throws Exception {
         http
-            // Disable CSRF protection (common for stateless REST APIs)
             .csrf(csrf -> csrf.disable())
-            // Enable CORS using the corsConfigurationSource bean
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            // Configure session management to be stateless (JWT handles state)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            // Define authorization rules for HTTP requests
             .authorizeHttpRequests(auth -> auth
-                // Allow public access to registration and login endpoints
                 .requestMatchers("/register", "/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/users/**").permitAll()
-                // Require authentication for any other request
                 .anyRequest().authenticated()
             )
-            // Add the custom JWT filter before the standard UsernamePasswordAuthenticationFilter
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-            // Configure custom exception handling for authentication/authorization failures
             .exceptionHandling(exception -> exception
-                .authenticationEntryPoint(authenticationEntryPoint()) // Handles failed authentication attempts (401)
-                .accessDeniedHandler(accessDeniedHandler())         // Handles failed authorization attempts (403)
+                .authenticationEntryPoint(authenticationEntryPoint())
+                .accessDeniedHandler(accessDeniedHandler())
             );
 
         return http.build();
     }
 
     /**
-     * Configures Cross-Origin Resource Sharing (CORS) settings.
-     * Allows requests from specified origins (e.g., the frontend application or API Gateway).
-     *
-     * @return A CorsConfigurationSource instance.
+     * Configures CORS settings for cross-origin requests.
+     * @return CorsConfigurationSource with allowed origins, methods, and headers
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Allow requests specifically from the frontend/gateway origin during development/production
-        // IMPORTANT: Replace "*" with specific origins in production for security!
-        config.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:8081")); // Example: Allow frontend and gateway
-        // Allow common HTTP methods
+        config.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:8081"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        // Allow specific headers required for authentication and content type
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        // Allow credentials (like cookies or auth headers) to be sent
-        // Note: Cannot use "*" for allowedOrigins when allowCredentials is true
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Apply this CORS configuration to all paths ("/**")
         source.registerCorsConfiguration("/**", config);
         return source;
     }
 
     /**
-     * Defines the entry point for handling authentication failures (401 Unauthorized).
-     * Returns a simple error message in the response body.
-     *
-     * @return An AuthenticationEntryPoint instance.
+     * Handler for authentication failures returning 401 Unauthorized.
+     * @return AuthenticationEntryPoint implementation
      */
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint() {
         return (request, response, authException) -> {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 401
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.getWriter().write("Unauthorized: " + authException.getMessage());
         };
     }
 
     /**
-     * Defines the handler for handling authorization failures (403 Forbidden).
-     * Returns a simple error message when an authenticated user tries to access a resource they don't have permission for.
-     *
-     * @return An AccessDeniedHandler instance.
+     * Handler for authorization failures returning 403 Forbidden.
+     * @return AccessDeniedHandler implementation
      */
     @Bean
     public AccessDeniedHandler accessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN); // 403
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.getWriter().write("Access Denied: " + accessDeniedException.getMessage());
         };
     }

@@ -7,38 +7,36 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value; // Import Value
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.convert.MongoConverter;
-import org.springframework.stereotype.Repository; // Use Repository for implementation
+import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 /**
- * Implementation of the SearchRepository using MongoDB aggregation pipeline with $search (Atlas Search).
- * Requires a MongoDB Atlas Search index named 'default' on the 'JobPostings' collection
- * covering fields like 'role', 'description', and 'skillSet'.
+ * Search repository implementation using MongoDB Atlas Search.
+ * Requires Atlas Search index named 'default' on JobPostings collection.
  */
-@Repository // Mark this as a Spring component
+@Repository
 public class SearchRepositoryImpl implements SearchRepository {
 
     @Autowired
-    private MongoClient client; // Injects the configured MongoDB client
+    private MongoClient client;
 
     @Autowired
-    private MongoConverter converter; // Used to convert BSON Documents back to JobPosting objects
+    private MongoConverter converter;
 
-    @Value("${spring.data.mongodb.database}") // Inject database name from properties
+    @Value("${spring.data.mongodb.database}")
     private String databaseName;
 
     private static final String COLLECTION_NAME = "JobPostings";
 
     /**
-     * Executes the Atlas Search aggregation pipeline.
-     *
-     * @param text The search query string provided by the user.
-     * @return A list of JobPostings matching the search criteria.
+     * Executes Atlas Search aggregation pipeline for job search.
+     * @param text Search query text
+     * @return List of matching job postings
      */
     @Override
     public List<JobPosting> findByText(String text) {
@@ -48,27 +46,20 @@ public class SearchRepositoryImpl implements SearchRepository {
         MongoDatabase database = client.getDatabase(databaseName);
         MongoCollection<Document> collection = database.getCollection(COLLECTION_NAME);
 
-        // Define the Atlas Search aggregation pipeline stages
         AggregateIterable<Document> result = collection.aggregate(Arrays.asList(
-                // Stage 1: $search - Performs the full-text search using the 'default' index
                 new Document("$search",
-                        new Document("index", "default") // Assumes an Atlas Search index named 'default'
+                        new Document("index", "default")
                                 .append("text",
                                         new Document("query", text)
-                                                // Search across these fields
                                                 .append("path", Arrays.asList("role", "description", "skillSet"))
                                 )
                 ),
-                // Stage 2: $sort (Optional) - Sort results, e.g., by experience or relevance score
                 new Document("$sort",
-                        new Document("experience", 1L) // Example: Sort by experience ascending
-                        // For relevance sorting: new Document("score", new Document("$meta", "searchScore"))
+                        new Document("experience", 1L)
                 ),
-                // Stage 3: $limit (Optional) - Limit the number of results returned
-                new Document("$limit", 10L) // Example: Limit to top 10 results
+                new Document("$limit", 10L)
         ));
 
-        // Convert the resulting BSON Documents back into JobPosting Java objects
         result.forEach(doc -> posts.add(converter.read(JobPosting.class, doc)));
 
         return posts;

@@ -7,18 +7,16 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 /**
- * Spring Data MongoDB repository for the User collection.
- * Provides standard CRUD operations and custom query methods.
+ * MongoDB repository for User entity operations.
+ * Provides CRUD operations and custom queries for user data.
  */
 @Repository
 public interface UserRepository extends MongoRepository<User, String> {
 
     /**
-     * Finds a user by their unique username.
-     * This method is crucial for the Spring Security authentication process.
-     *
-     * @param username The username to search for.
-     * @return An Optional containing the User if found, otherwise empty.
+     * Finds user by username for authentication.
+     * @param username Username to search
+     * @return Optional containing user if found
      */
     Optional<User> findByUsername(String username);
 

@@ -18,17 +18,14 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 /**
- * Custom Gateway Filter to:
- * 1. Bypass checks for public routes (defined in RouteValidator).
- * 2. Validate JWT tokens for secured routes.
- * 3. Perform role-based authorization checks (using RouteValidator).
- * 4. Add custom headers (X-User-ID, X-User-Roles) for downstream services.
+ * Gateway filter for JWT authentication and authorization.
+ * Validates tokens for secured routes and adds user headers for downstream services.
  */
 @Component
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
     @Autowired
-    private RouteValidator validator; // Validator checks public paths and roles
+    private RouteValidator validator;
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -37,19 +34,20 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         super(Config.class);
     }
 
+    /**
+     * Applies authentication and authorization logic to gateway requests.
+     * @param config Configuration object (empty)
+     * @return GatewayFilter implementation
+     */
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
             ServerHttpRequest request = exchange.getRequest();
 
-            // 1. Check if the endpoint is public using the validator
             if (validator.isPublic(request)) {
-                return chain.filter(exchange); // Public route, skip all auth checks
+                return chain.filter(exchange);
             }
 
-            // --- It's a secured route, proceed with JWT checks ---
-
-            // 2. Check if Authorization header is present
             if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
                 return onError(exchange, HttpStatus.UNAUTHORIZED, "Authorization header is missing");
             }
@@ -59,33 +57,25 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 return onError(exchange, HttpStatus.UNAUTHORIZED, "Invalid Authorization header format (Requires Bearer token)");
             }
 
-            // 3. Extract Token
             String token = authHeader.substring(7);
 
             try {
-                // 4. Validate Token (Signature & Expiration)
                 if (!jwtUtil.validateToken(token)) {
-                     // The validateToken method handles internal exceptions and returns false if invalid
                      return onError(exchange, HttpStatus.UNAUTHORIZED, "JWT Token is invalid or expired");
                 }
 
-                // 5. Extract Claims (Username and Roles)
                 String username = jwtUtil.extractUsername(token);
-                List<String> roles = jwtUtil.extractRoles(token); // Ensure roles claim name matches Auth Service
+                List<String> roles = jwtUtil.extractRoles(token);
 
-                // 6. Perform Authorization Check using RouteValidator
                 if (!validator.isAuthorized(request, roles)) {
                    return onError(exchange, HttpStatus.FORBIDDEN, "Access Denied: User does not have the required role for this resource");
                 }
 
-
-                // 7. Add Headers for Downstream Services (If validation and authorization passed)
                 ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
-                        .header("X-User-ID", username) // Using username as ID for simplicity, adjust if needed
+                        .header("X-User-ID", username)
                         .header("X-User-Roles", roles != null ? String.join(",", roles) : "")
                         .build();
 
-                // Proceed with the modified request containing the new headers
                 return chain.filter(exchange.mutate().request(modifiedRequest).build());
 
             } catch (ExpiredJwtException e) {
@@ -102,27 +92,18 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     }
 
     /**
-     * Helper method to generate an error response.
-     * Sets the HTTP status code and completes the response.
-     *
-     * @param exchange The current server exchange.
-     * @param status   The HTTP status to return.
-     * @param message  The error message to log.
-     * @return A Mono<Void> indicating completion.
+     * Generates error response for authentication/authorization failures.
+     * @param exchange Server exchange
+     * @param status HTTP status code
+     * @param message Error message
+     * @return Mono indicating completion
      */
     private Mono<Void> onError(ServerWebExchange exchange, HttpStatus status, String message) {
-        System.err.println("API Gateway Auth Filter Error: Status=" + status + ", Message=" + message + ", Path=" + exchange.getRequest().getURI().getPath()); // Log error details
+        System.err.println("API Gateway Auth Filter Error: Status=" + status + ", Message=" + message + ", Path=" + exchange.getRequest().getURI().getPath());
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(status);
-        // Optionally add error message to response body if desired for client feedback
-        // response.getHeaders().add("Content-Type", "application/json");
-        // byte[] bytes = ("{\"error\":\"" + status.getReasonPhrase() + "\", \"message\":\"" + message + "\"}").getBytes(StandardCharsets.UTF_8);
-        // DataBuffer buffer = response.bufferFactory().wrap(bytes);
-        // return response.writeWith(Mono.just(buffer));
         return response.setComplete();
     }
 
-    // Empty config class required by AbstractGatewayFilterFactory
     public static class Config {}
 }
-

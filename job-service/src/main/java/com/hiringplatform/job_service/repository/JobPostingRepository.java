@@ -5,11 +5,9 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
 /**
- * Spring Data MongoDB repository for the JobPosting collection.
- * Provides standard CRUD operations automatically.
+ * MongoDB repository for JobPosting entity operations.
+ * Provides standard CRUD operations for job postings.
  */
 @Repository
 public interface JobPostingRepository extends MongoRepository<JobPosting, String> {
-    // No custom methods needed for basic CRUD.
-    // Search functionality is handled by SearchRepository.
 }

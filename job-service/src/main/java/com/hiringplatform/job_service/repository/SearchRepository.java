@@ -4,16 +4,15 @@ import com.hiringplatform.job_service.model.JobPosting;
 import java.util.List;
 
 /**
- * Interface defining custom search operations for JobPostings.
- * Separates complex search logic from the basic CRUD repository.
+ * Interface for custom job posting search operations.
+ * Implemented using MongoDB aggregation for text-based searches.
  */
 public interface SearchRepository {
 
     /**
-     * Performs a text-based search across relevant fields of JobPostings.
-     *
-     * @param text The search query string.
-     * @return A list of matching JobPosting objects.
+     * Searches job postings by text query across multiple fields.
+     * @param text Search query string
+     * @return List of matching job postings
      */
     List<JobPosting> findByText(String text);
 
