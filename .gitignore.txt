@@ -1,0 +1,22 @@
+# Compiled code
+bin/
+target/
+build/
+*.class
+
+# IDE files
+.project
+.classpath
+.settings/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Secrets
+.env
