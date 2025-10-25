@@ -14,7 +14,7 @@ This repository contains the backend source code for a microservices-based Hirin
 - Inter-service communication using OpenFeign
 - MongoDB for data persistence
 
-- ## Tech Stack
+## Tech Stack
 
 **Language:** Java 21
 
