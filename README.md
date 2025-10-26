@@ -59,7 +59,9 @@ Manages detailed professional profiles for job seekers.
 - Frontend interacts only with the API Gateway
 - API Gateway routes requests to the appropriate microservice after validating security
 - Microservices communicate with each other through the API Gateway or directly via Feign Clients using service discovery
-- Example: Job Service fetches user details from Auth Service when needed## Environment Variables
+- Example: Job Service fetches user details from Auth Service when needed
+
+## Environment Variables
 
 To run this project, you will need to add the following environment variables:
 
@@ -121,6 +123,7 @@ mvn clean package
 ```## Run Locally
 
 The services must be started in the following order:
+
 
 ### 1. Start Service Registry
 
