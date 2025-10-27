@@ -321,7 +321,39 @@ GET /candidate/profile/user/{userId}
 | :--- | :--- | :--- |
 | `userId` | `string` | **Required**. User ID |
 
-**Role:** Public (for inter-service use)## Deployment
+**Role:** Public (for inter-service use)
+
+## Frontend Application
+
+A React-based Single Page Application (SPA) for the Hiring Platform.
+
+### Frontend
+- **Directory:** `frontend/`
+- **Port:** 3000 (development)
+- **Description:** React application for user interface
+
+For detailed frontend setup and usage instructions, see [frontend/README.md](frontend/README.md).
+
+### Quick Start (Frontend)
+
+1. Navigate to frontend directory:
+```bash
+cd frontend
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Start development server:
+```bash
+npm start
+```
+
+The frontend will be available at http://localhost:3000
+
+## Deployment
 
 This repository contains the following microservice projects:
 
