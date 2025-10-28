@@ -68,6 +68,10 @@ public class JobPosting {
         this.recruiterId = recruiterId;
     }
 
+    /**
+     * Returns string representation of job posting for debugging.
+     * @return String containing all job posting fields
+     */
     @Override
     public String toString() {
         return "JobPosting{" +

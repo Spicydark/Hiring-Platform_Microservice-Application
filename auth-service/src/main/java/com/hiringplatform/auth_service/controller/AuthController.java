@@ -65,23 +65,15 @@ public class AuthController {
             Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword())
             );
-
             final UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-
-            // Lookup the user entity to obtain the MongoDB id and include it in the token
             Optional<com.hiringplatform.auth_service.model.User> userOptional = userRepository.findByUsername(userDetails.getUsername());
             if (!userOptional.isPresent()) {
-                System.err.println("Authenticated user not found in repository: " + userDetails.getUsername());
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Authenticated user record not found");
             }
-
             String userId = userOptional.get().getId();
             final String jwt = jwtUtil.generateToken(userDetails, userId);
-
             return ResponseEntity.ok(jwt);
-
         } catch (Exception e) {
-             System.err.println("Login failed for user " + authRequest.getUsername() + ": " + e.getMessage());
              return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
         }
     }
@@ -99,7 +91,6 @@ public class AuthController {
              UserDTO userDTO = new UserDTO(user.getId(), user.getUsername(), user.getEmail(), user.getRole());
              return ResponseEntity.ok(userDTO);
          } else {
-             System.err.println("User not found for ID: " + userId);
              return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
          }
     }

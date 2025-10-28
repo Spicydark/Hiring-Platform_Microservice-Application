@@ -94,7 +94,6 @@ public class JwtUtil {
         try {
             return extractExpiration(token).before(new Date());
         } catch (Exception e) {
-            System.err.println("Error checking token expiration: " + e.getMessage());
             return true;
         }
     }
@@ -109,7 +108,6 @@ public class JwtUtil {
              extractAllClaims(token);
              return !isTokenExpired(token);
          } catch (Exception e) {
-             System.err.println("JWT validation failed: " + e.getMessage());
              return false;
          }
      }

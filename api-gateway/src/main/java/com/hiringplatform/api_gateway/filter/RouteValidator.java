@@ -73,19 +73,15 @@ public class RouteValidator {
         if (userRoles == null || userRoles.isEmpty()) {
             return false;
         }
-
         String requestPath = request.getURI().getPath();
         HttpMethod requestMethod = request.getMethod();
-
         List<String> allowedForAnyAuth = authenticatedEndpoints.get(requestMethod);
         if (allowedForAnyAuth != null && allowedForAnyAuth.stream().anyMatch(pattern -> pathMatcher.match(pattern, requestPath))) {
             return true;
         }
-
         for (String roleWithPrefix : userRoles) {
             String simpleRole = roleWithPrefix.replace("ROLE_", "");
             Map<HttpMethod, List<String>> methodToPathsMap = roleSpecificEndpoints.get(simpleRole);
-
             if (methodToPathsMap != null) {
                 List<String> allowedPaths = methodToPathsMap.get(requestMethod);
                  if (allowedPaths != null && allowedPaths.stream().anyMatch(pattern -> pathMatcher.match(pattern, requestPath))) {
@@ -93,8 +89,6 @@ public class RouteValidator {
                  }
             }
         }
-
-        System.err.println("Authorization Failed: User roles " + userRoles + " not permitted for " + requestMethod + " " + requestPath);
         return false;
     }
 }
