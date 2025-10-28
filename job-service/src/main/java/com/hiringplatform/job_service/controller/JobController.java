@@ -23,7 +23,6 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/posts")
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class JobController {
 
 @Autowired

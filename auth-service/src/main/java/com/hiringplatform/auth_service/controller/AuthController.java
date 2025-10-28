@@ -67,7 +67,16 @@ public class AuthController {
             );
 
             final UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-            final String jwt = jwtUtil.generateToken(userDetails);
+
+            // Lookup the user entity to obtain the MongoDB id and include it in the token
+            Optional<com.hiringplatform.auth_service.model.User> userOptional = userRepository.findByUsername(userDetails.getUsername());
+            if (!userOptional.isPresent()) {
+                System.err.println("Authenticated user not found in repository: " + userDetails.getUsername());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Authenticated user record not found");
+            }
+
+            String userId = userOptional.get().getId();
+            final String jwt = jwtUtil.generateToken(userDetails, userId);
 
             return ResponseEntity.ok(jwt);
 

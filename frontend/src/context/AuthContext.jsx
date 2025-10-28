@@ -24,10 +24,30 @@ export const AuthProvider = ({ children }) => {
   // Login function
   const login = async (credentials) => {
     try {
-      const jwtToken = await loginApi(credentials);
-      const userData = parseJwt(jwtToken);
+      const response = await loginApi(credentials);
+      
+      // Check if response contains both token and user data
+      let jwtToken, userData;
+      
+      if (typeof response === 'string') {
+        // Response is just the token
+        jwtToken = response;
+        userData = parseJwt(jwtToken);
+      } else if (response.token) {
+        // Response is an object with token and possibly user data
+        jwtToken = response.token;
+        userData = response.user || parseJwt(jwtToken);
+      } else {
+        throw new Error('Invalid response format');
+      }
       
       if (userData) {
+        // If no ID in token, use username as fallback (NOT IDEAL)
+        if (!userData.id) {
+          console.warn('⚠️ No user ID in JWT token. Using username as recruiterId. Please fix backend!');
+          userData.id = userData.username;
+        }
+        
         setToken(jwtToken);
         setUser(userData);
         localStorage.setItem('token', jwtToken);

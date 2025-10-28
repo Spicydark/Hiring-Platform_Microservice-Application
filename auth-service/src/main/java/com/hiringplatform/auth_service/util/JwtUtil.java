@@ -96,11 +96,20 @@ public class JwtUtil {
      * @param userDetails Spring Security user details
      * @return Signed JWT token string
      */
-    public String generateToken(UserDetails userDetails) {
+    /**
+     * Generates JWT token for authenticated user with roles and userId claim.
+     * @param userDetails Spring Security user details
+     * @param userId MongoDB user id to include as a claim (may be null)
+     * @return Signed JWT token string
+     */
+    public String generateToken(UserDetails userDetails, String userId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("roles", userDetails.getAuthorities().stream()
                                       .map(GrantedAuthority::getAuthority)
                                       .collect(Collectors.toList()));
+        if (userId != null) {
+            claims.put("userId", userId);
+        }
         return createToken(claims, userDetails.getUsername());
     }
 

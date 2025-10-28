@@ -98,6 +98,7 @@ const Register = () => {
                     className="form-control"
                     id="password"
                     name="password"
+                    autoComplete="current-password"
                     value={formData.password}
                     onChange={handleChange}
                     required
