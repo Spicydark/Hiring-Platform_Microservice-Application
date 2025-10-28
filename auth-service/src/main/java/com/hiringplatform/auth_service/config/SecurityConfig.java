@@ -4,7 +4,6 @@ import com.hiringplatform.auth_service.filter.JwtRequestFilter;
 import com.hiringplatform.auth_service.repository.UserRepository;
 
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,16 +24,12 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Collections;
-import java.util.List;
 
 /**
  * Security configuration for authentication service.
- * Configures JWT-based stateless authentication, authorization rules, and CORS.
+ * Configures JWT-based stateless authentication and authorization rules.
  */
 @Configuration
 @EnableWebSecurity
@@ -45,7 +40,6 @@ public class SecurityConfig {
 
     /**
      * Loads user details from database for authentication.
-     * @return UserDetailsService implementation
      */
     @Bean
     public UserDetailsService userDetailsService() {
@@ -60,7 +54,6 @@ public class SecurityConfig {
 
     /**
      * Password encoder using BCrypt hashing algorithm.
-     * @return BCryptPasswordEncoder instance
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -69,7 +62,6 @@ public class SecurityConfig {
 
     /**
      * Authentication provider linking UserDetailsService and PasswordEncoder.
-     * @return DaoAuthenticationProvider for username/password authentication
      */
     @Bean
     public AuthenticationProvider authenticationProvider() {
@@ -81,9 +73,6 @@ public class SecurityConfig {
 
     /**
      * Exposes AuthenticationManager for programmatic authentication.
-     * @param config Spring-provided authentication configuration
-     * @return AuthenticationManager instance
-     * @throws Exception if manager cannot be retrieved
      */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
@@ -92,16 +81,12 @@ public class SecurityConfig {
 
     /**
      * Configures security filter chain with JWT authentication.
-     * @param http HttpSecurity object to configure
-     * @param jwtAuthFilter Custom JWT request filter
-     * @return Configured SecurityFilterChain
-     * @throws Exception if configuration fails
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtRequestFilter jwtAuthFilter) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .cors().and() // Let the API Gateway handle CORS globally
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/register", "/login").permitAll()
@@ -118,25 +103,7 @@ public class SecurityConfig {
     }
 
     /**
-     * Configures CORS settings for cross-origin requests.
-     * @return CorsConfigurationSource with allowed origins, methods, and headers
-     */
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:8081"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        config.setAllowCredentials(true);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
-    }
-
-    /**
      * Handler for authentication failures returning 401 Unauthorized.
-     * @return AuthenticationEntryPoint implementation
      */
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint() {
@@ -148,7 +115,6 @@ public class SecurityConfig {
 
     /**
      * Handler for authorization failures returning 403 Forbidden.
-     * @return AccessDeniedHandler implementation
      */
     @Bean
     public AccessDeniedHandler accessDeniedHandler() {
