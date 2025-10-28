@@ -30,10 +30,8 @@ public class CandidateController {
     public ResponseEntity<CandidateProfile> saveOrUpdateProfile(
             @RequestBody CandidateProfile profile,
             @RequestHeader("X-User-ID") String userId) {
-
         try {
             Optional<CandidateProfile> existingProfileOpt = candidateProfileRepository.findByUserId(userId);
-
             if (existingProfileOpt.isPresent()) {
                 CandidateProfile existingProfile = existingProfileOpt.get();
                 existingProfile.setFullName(profile.getFullName());
@@ -50,7 +48,6 @@ public class CandidateController {
                 return ResponseEntity.status(HttpStatus.CREATED).body(savedProfile);
             }
         } catch (Exception e) {
-            System.err.println("Error saving/updating profile for user " + userId + ": " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

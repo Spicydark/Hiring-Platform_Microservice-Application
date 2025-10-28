@@ -86,7 +86,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtRequestFilter jwtAuthFilter) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
-            .cors().and() // Let the API Gateway handle CORS globally
+            .cors().and()
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/register", "/login").permitAll()
@@ -98,7 +98,6 @@ public class SecurityConfig {
                 .authenticationEntryPoint(authenticationEntryPoint())
                 .accessDeniedHandler(accessDeniedHandler())
             );
-
         return http.build();
     }
 

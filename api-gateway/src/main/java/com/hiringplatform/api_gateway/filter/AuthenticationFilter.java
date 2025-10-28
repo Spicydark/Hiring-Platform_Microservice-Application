@@ -43,49 +43,36 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
             ServerHttpRequest request = exchange.getRequest();
-
             if (validator.isPublic(request)) {
                 return chain.filter(exchange);
             }
-
             if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
                 return onError(exchange, HttpStatus.UNAUTHORIZED, "Authorization header is missing");
             }
-
             String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                 return onError(exchange, HttpStatus.UNAUTHORIZED, "Invalid Authorization header format (Requires Bearer token)");
             }
-
             String token = authHeader.substring(7);
-
             try {
                 if (!jwtUtil.validateToken(token)) {
                      return onError(exchange, HttpStatus.UNAUTHORIZED, "JWT Token is invalid or expired");
                 }
-
                 String username = jwtUtil.extractUsername(token);
                 List<String> roles = jwtUtil.extractRoles(token);
-
                 if (!validator.isAuthorized(request, roles)) {
                    return onError(exchange, HttpStatus.FORBIDDEN, "Access Denied: User does not have the required role for this resource");
                 }
-
                 ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
                         .header("X-User-ID", username)
                         .header("X-User-Roles", roles != null ? String.join(",", roles) : "")
                         .build();
-
                 return chain.filter(exchange.mutate().request(modifiedRequest).build());
-
             } catch (ExpiredJwtException e) {
-                 System.err.println("JWT expired: " + e.getMessage());
                  return onError(exchange, HttpStatus.UNAUTHORIZED, "JWT Token has expired");
             } catch (SignatureException | MalformedJwtException e) {
-                 System.err.println("JWT signature/format error: " + e.getMessage());
                  return onError(exchange, HttpStatus.UNAUTHORIZED, "JWT Token is invalid");
             } catch (Exception e) {
-                System.err.println("Unexpected error processing JWT: " + e.getMessage());
                 return onError(exchange, HttpStatus.INTERNAL_SERVER_ERROR, "Error processing JWT token");
             }
         };
@@ -99,7 +86,6 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
      * @return Mono indicating completion
      */
     private Mono<Void> onError(ServerWebExchange exchange, HttpStatus status, String message) {
-        System.err.println("API Gateway Auth Filter Error: Status=" + status + ", Message=" + message + ", Path=" + exchange.getRequest().getURI().getPath());
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(status);
         return response.setComplete();
