@@ -6,9 +6,17 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
+/**
+ * Global CORS configuration for API Gateway.
+ * Allows cross-origin requests from frontend application.
+ */
 @Configuration
 public class CorsGlobalConfig {
 
+    /**
+     * Configures CORS filter allowing frontend access to gateway endpoints.
+     * @return Configured CorsWebFilter for reactive gateway
+     */
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration corsConfig = new CorsConfiguration();
